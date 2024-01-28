@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="14.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!-- Defaults -->
+  <PropertyGroup>
+    <ProjectDir>$(MSBuildThisFileDirectory)</ProjectDir>
+    <SourceDir>$(ProjectDir)src/</SourceDir>
+    <ConfigPathSegment>Debug</ConfigPathSegment>
+    <ConfigPathSegment Condition="'$(Configuration)'!=''">$(Configuration)</ConfigPathSegment>
+    <LangVersion>10.0</LangVersion>
+  </PropertyGroup>
+
+  <!-- Set up some common paths -->
+  <PropertyGroup>
+    <CommonPath>$(SourceDir)Common/src/</CommonPath>
+    <UnitTestCommonProjectPath>$(SourceDir)Common/UnitTests.Common/UnitTests.Common.csproj</UnitTestCommonProjectPath>
+    <ParentFolder>$([System.IO.Path]::GetDirectoryName($(MSBuildProjectDirectory)))</ParentFolder>
+    <IsSampleProject>$(ParentFolder.EndsWith(`Samples`, true, null))</IsSampleProject>
+    <IsTestProject>$(MSBuildProjectName.EndsWith(`Tests`, true, null))</IsTestProject>
+    <IsClientProject>$(MSBuildProjectName.Contains(`Client`))</IsClientProject>
+    <IsMsmqProject>$(MSBuildProjectName.Contains(`MSMQ`))</IsMsmqProject> 
+    <IsMetadataProject>$(MSBuildProjectName.Contains(`Metadata`))</IsMetadataProject>
+    <IsHttpProject>$(MSBuildProjectName.Contains(`.Http`))</IsHttpProject>
+    <IsQueueProject>$(MSBuildProjectName.Contains(`Queue`))</IsQueueProject>
+    <IsBuildToolsProject>$(MSBuildProjectName.Contains(`BuildTools`))</IsBuildToolsProject>
+    <IsTemplatesProject>$(MSBuildProjectName.Contains(`Templates`))</IsTemplatesProject>
+    <IncludeCommonCode Condition="!($(IsTestProject) OR $(IsSampleProject) OR $(IsBuildToolsProject) OR $(IsTemplatesProject) OR $(IsClientProject))">true</IncludeCommonCode>
+    <ReferenceCommonTestProject Condition="($(IsTestProject) AND !($(IsBuildToolsProject)) AND !($(IsTemplatesProject)) AND !($(IsClientProject)))">true</ReferenceCommonTestProject>
+  </PropertyGroup>
+
+  <!-- UT concurrency -->
+  <PropertyGroup>
+    <RunUnitTestsConcurrently Condition="$(IsTestProject)">true</RunUnitTestsConcurrently>
+  </PropertyGroup>  
+  <PropertyGroup >
+    <RunUnitTestsConcurrently Condition="$(IsTestProject) AND ($(IsMetadataProject) OR $(IsMsmqProject) OR $(IsQueueProject))">false</RunUnitTestsConcurrently>
+  </PropertyGroup>
+  <PropertyGroup >
+    <RunUnitTestsConcurrently Condition="$(IsTestProject) AND $(IsHttpProject)">ExceptNetFx</RunUnitTestsConcurrently>
+  </PropertyGroup>
+
+  <!-- Output directories -->
+  <PropertyGroup>
+    <BinDir Condition="'$(BinDir)'==''">$(ProjectDir)bin/</BinDir>
+    <ObjDir Condition="'$(ObjDir)'==''">$(ProjectDir)bin/obj/</ObjDir>
+    <BaseIntermediateOutputPath>$(ObjDir)/$(MSBuildProjectName)/</BaseIntermediateOutputPath>
+    <MSBuildProjectExtensionsPath>$(BaseIntermediateOutputPath)</MSBuildProjectExtensionsPath>
+    <ProjectAssetsFile>$(BaseIntermediateOutputPath)/project.assets.json</ProjectAssetsFile>
+    <WarningsAsErrors>CS4014</WarningsAsErrors>
+  </PropertyGroup>
+
+  <!-- Set up the default output and intermediate paths -->
+  <PropertyGroup>
+    <OutputPath Condition="'$(OutputPath)'==''">$(BinDir)$(ConfigPathSegment)/$(MSBuildProjectName)/</OutputPath>
+    <IntermediateOutputRootPath Condition="'$(IntermediateOutputRootPath)' == ''">$(BaseIntermediateOutputPath)</IntermediateOutputRootPath>
+    <IntermediateOutputPath Condition="'$(IntermediateOutputPath)' == ''">$(IntermediateOutputRootPath)$(MSBuildProjectName)/</IntermediateOutputPath>
+  </PropertyGroup>
+
+  <!-- Disable the default embedded resource behavior as we have a naming convention which is different than what the SDK uses -->
+  <PropertyGroup>
+    <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
+  </PropertyGroup>
+
+  <!-- Git versioning related items and properties -->
+  <PropertyGroup>
+    <GitVersionBaseDirectory>$(MSBuildThisFileDirectory)</GitVersionBaseDirectory>
+  </PropertyGroup>
+  <ItemGroup Condition="!($(IsTestProject) OR $(IsSampleProject))">
+    <PackageReference Include="Nerdbank.GitVersioning">
+      <Version>3.6.133</Version>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <!-- Include license file in packages -->
+    <Content Include="$(ProjectDir)LICENSE" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <!-- Configuring strong name signing -->
+  <PropertyGroup Condition="!($(IsTestProject) OR $(IsSampleProject)) AND Exists('$(ProjectDir)corewcf.snk')">
+    <AssemblyOriginatorKeyFile>$(ProjectDir)corewcf.snk</AssemblyOriginatorKeyFile>
+	  <SignAssembly>true</SignAssembly>
+    <DelaySign>false</DelaySign>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$(IsTestProject) AND '$(CollectCoverage)' == 'true'">
+    <CoverletOutput Condition="'$(CoverletOutputDir)' != '' AND '$(CoverletOutput)' == ''">$(CoverletOutputDir)/$(MSBuildProjectName).xml</CoverletOutput>
+    <CoverletOutputFormat Condition="'$(CoverletOutputFormat)' == ''">cobertura</CoverletOutputFormat>
+  </PropertyGroup>
+  <Import Project="$(ProjectDir)resources.props" Condition="Exists('$(ProjectDir)resources.props')" />
+  <Import Project="$(ProjectDir)nuspec.props" Condition="!($(IsTestProject) OR $(IsSampleProject)) AND Exists('$(ProjectDir)nuspec.props')" />
+</Project>

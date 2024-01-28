@@ -1,0 +1,70 @@
+stages:
+- stage: CodeSign
+  displayName: Code Sign
+  dependsOn: Pack
+  condition: and(succeeded(), not(eq(variables['build.reason'], 'PullRequest')))
+  jobs:
+  - job: CodeSign
+    displayName: Code Signing
+    pool:
+      vmImage: windows-latest # Code signing must run on a Windows agent for Authenticode signing (dll/exe)
+    variables:
+    - group: Sign Client Credentials
+    steps:
+    
+    # Retreive unsigned artifacts and file list
+    - download: current
+      artifact: config
+      displayName: Download signing file list
+
+    - download: current
+      artifact: BuildPackages
+      displayName: Download build artifacts
+
+    - task: UseDotNet@2
+      displayName: 'Use .NET SDK 6.x'
+      inputs:
+        version: 6.x
+
+    # Install the code signing tool
+    - task: DotNetCoreCLI@2
+      inputs:
+        command: custom
+        custom: tool
+        arguments: install --tool-path . sign --version 0.9.0-beta.23127.3
+      displayName: Install SignTool tool
+      
+    # Run the signing command
+    - pwsh: |
+        .\sign code azure-key-vault `
+        "**/*.nupkg" `
+        --base-directory "$(Pipeline.Workspace)\BuildPackages" `
+        --file-list "$(Pipeline.Workspace)\config\filelist.txt" `
+        --publisher-name "CoreWCF" `
+        --description "CoreWCF" `
+        --description-url "https://github.com/CoreWCF/CoreWCF" `
+        --azure-key-vault-tenant-id "$(SignTenantId)" `
+        --azure-key-vault-client-id "$(SignClientId)" `
+        --azure-key-vault-client-secret '$(SignClientSecret)' `
+        --azure-key-vault-certificate "$(SignKeyVaultCertificate)" `
+        --azure-key-vault-url "$(SignKeyVaultUrl)"
+      displayName: Sign packages
+
+    - pwsh: |
+        .\sign code azure-key-vault `
+        "**/*.snupkg" `
+        --base-directory "$(Pipeline.Workspace)\BuildPackages" `
+        --file-list "$(Pipeline.Workspace)\config\filelist.txt" `
+        --publisher-name "CoreWCF" `
+        --description "CoreWCF" `
+        --description-url "https://github.com/CoreWCF/CoreWCF" `
+        --azure-key-vault-tenant-id "$(SignTenantId)" `
+        --azure-key-vault-client-id "$(SignClientId)" `
+        --azure-key-vault-client-secret '$(SignClientSecret)' `
+        --azure-key-vault-certificate "$(SignKeyVaultCertificate)" `
+        --azure-key-vault-url "$(SignKeyVaultUrl)"
+      displayName: Sign symbol packages
+      
+    - publish: $(Pipeline.Workspace)/BuildPackages
+      displayName: Publish Signed Packages
+      artifact: SignedPackages
